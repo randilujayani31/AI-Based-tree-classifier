@@ -1,0 +1,65 @@
+import pandas as pd
+from sklearn.model_selection import KFold
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from keras import models, layers, optimizers
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.metrics import accuracy_score
+
+# Load the dataset
+df = pd.read_csv('data.csv', delimiter=';')
+
+# Identify the target variable (assuming the column name is 'label')
+target = df['label']
+
+# Identify the feature variables (all columns except the target column)
+features = df.drop(columns=['label'])
+
+# Initialize K-Fold Cross-Validation
+kf = KFold(n_splits=10, shuffle=True, random_state=42)
+
+accuracies = []
+histories = []
+
+# Initialize the OneHotEncoder
+encoder = OneHotEncoder(sparse=False)
+
+for train_index, test_index in kf.split(features):
+    # Split the data into train and test sets
+    X_train, X_test = features.iloc[train_index], features.iloc[test_index]
+    y_train, y_test = target.iloc[train_index], target.iloc[test_index]
+    
+    # Scale the feature data
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+    
+    # Fit and transform the training labels
+    y_train_encoded = encoder.fit_transform(y_train.values.reshape(-1, 1))
+    
+    # Transform the testing labels
+    y_test_encoded = encoder.transform(y_test.values.reshape(-1, 1))
+    
+    # Define the model
+    model = models.Sequential()
+    model.add(layers.Dense(32, activation='relu', input_shape=(X_train_scaled.shape[1],)))
+    model.add(layers.Dense(16, activation='relu'))
+    model.add(layers.Dense(y_train_encoded.shape[1], activation='softmax'))
+    
+    # Compile the model
+    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+    
+    # Train the model
+    val_epochs = 20
+    history = model.fit(X_train_scaled, y_train_encoded, epochs=val_epochs, batch_size=1, validation_split=0.2, verbose=0)
+    
+    # Evaluate the model
+    test_loss, test_accuracy = model.evaluate(X_test_scaled, y_test_encoded, verbose=0)
+    print(f"Fold accuracy: {test_accuracy}")
+    
+    accuracies.append(test_accuracy)
+    histories.append(history.history)
+
+# Calculate the mean accuracy across all folds
+mean_accuracy = np.mean(accuracies)
+print(f"Mean accuracy: {mean_accuracy}")
